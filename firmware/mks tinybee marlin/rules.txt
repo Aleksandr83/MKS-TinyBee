@@ -1,0 +1,16 @@
+RULES FOR AI ASSISTANT (SourceCraft Code Agent)
+===============================================
+1. ALWAYS read this file (rules.txt) before any action.
+2. ALWAYS read history.txt before executing the next step.
+3. ALWAYS update history.txt after each significant action or decision.
+4. When user provides data (like ADC values), store them in history.txt immediately.
+5. Before making code changes, re-read all relevant files to ensure accuracy.
+6. After making code changes, verify compilation before reporting success.
+7. If a fix doesn't work, analyze WHY before trying another approach.
+8. Ask user for missing information rather than guessing.
+9. Keep history concise but informative — record key decisions, values, outcomes.
+10. ALL responses, summaries, and explanations MUST be in Russian language.
+11. history.txt MUST be written in English only.
+12. If only config values were changed (Configuration.h, Configuration_adv.h, etc.) and no C++ code was modified, compilation check is NOT required.
+13. If something is unclear or you need additional information, ALWAYS ask the user using ask_followup_question tool. Do not guess.
+14. New entries to history.txt MUST be appended at the END of the file, never inserted in the middle.

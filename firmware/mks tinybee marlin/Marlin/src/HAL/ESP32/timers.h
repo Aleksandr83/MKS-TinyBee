@@ -35,6 +35,9 @@ typedef uint64_t hal_timer_t;
 #ifndef STEP_TIMER_NUM
   #define STEP_TIMER_NUM        0  // Timer Index for Stepper
 #endif
+#define MF_TIMER_STEP STEP_TIMER_NUM
+#define MF_TIMER_PULSE PULSE_TIMER_NUM
+#define MF_TIMER_TEMP TEMP_TIMER_NUM
 #ifndef PULSE_TIMER_NUM
   #define PULSE_TIMER_NUM       STEP_TIMER_NUM
 #endif

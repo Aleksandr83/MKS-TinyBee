@@ -28,5 +28,6 @@
         "list": "cpp",
         "regex": "cpp"
     },
-    "C_Cpp.errorSquiggles": "Disabled"
+    "C_Cpp.errorSquiggles": "Disabled",
+    "idf.currentSetup": "/home/user01/.espressif/v6.0.1/esp-idf"
 }

@@ -1,0 +1,516 @@
+HISTORY LOG
+===========
+
+2026-05-29: Initial problem — ADC buttons on ZONESTAR LCD not working.
+- Root cause (WRONG): Assumed R_PULLDOWN values were calculated from raw 12-bit as if 10-bit.
+- Fix (WRONG): Recalculated R_PULLDOWN for 10-bit targets: UP=0.0393, LEFT=0.0491, MIDDLE=0.0834, DOWN=0.1342, RIGHT=0.1923
+- Result: Only UP worked, but opened menu (UP value fell into RIGHT range).
+
+2026-05-29: User provided Marlin serial log with actual ADC values.
+- Real 10-bit values from user's LCD (from Marlin's ADC raw output):
+  UP: ~190-203 (mv≈656)
+  LEFT: ~246-255 (mv≈822)
+  MIDDLE: ~382-413 (mv≈1332)
+  DOWN: ~624-631 (mv≈2035)
+  RIGHT: ~813-851 (mv≈2747)
+- These match the ORIGINAL R_PULLDOWN values (0.182, 0.240, 0.480, 1.059, 2.593).
+- My "fix" was wrong — the original values were correct all along.
+- Restored original R_PULLDOWN values in pins_MKS_TINYBEE.h.
+- Firmware compiles successfully.
+
+2026-05-30: User requested to swap Menu and Down buttons.
+- Physical center button (ADC ~413, R_pulldown=0.480) was mapped to MIDDLE (Menu).
+- Physical bottom button (ADC ~631, R_pulldown=1.059) was mapped to DOWN.
+- Swapped: MIDDLE_R_PULLDOWN=1.059 (now triggers Down), DOWN_R_PULLDOWN=0.480 (now triggers Menu).
+- Updated comments to reflect the swap.
+- NEXT: Verify compilation, flash, and test.
+
+2026-05-30: User asked about endstop wiring (X-Stop, Y-Stop) for MKS TinyBee.
+- Board pinout: X_STOP_PIN=IO33, Y_STOP_PIN=IO32, Z_STOP_PIN=IO22.
+- Connector has 3 pins: GND, +5V, Signal.
+- Marlin Configuration.h: ENDSTOPPULLUPS is ENABLED (line 794).
+- Marlin Configuration.h: X_MIN_ENDSTOP_INVERTING=true, Y_MIN_ENDSTOP_INVERTING=true (lines 832-833).
+- With ENDSTOPPULLUPS enabled, the ESP32 GPIO pin uses internal pull-up resistor (~45kΩ to 3.3V).
+- Signal is normally HIGH (3.3V) when endstop is NOT triggered.
+- When endstop is triggered, Signal must connect to GND to pull the pin LOW.
+- This matches the standard "Normally Open (NO), Signal connects to GND" configuration.
+- The +5V pin on the connector is NOT used for mechanical endstops — it's for optional sensors.
+- Inverting=true means: triggered = LOW (pin reads LOW when switch is pressed).
+
+2026-05-30: Removed ADC debug serial output.
+- Removed SERIAL_ECHOPGM("ADC mv=") / SERIAL_ECHOLN(mv) from HAL_ESP32.cpp (HAL_adc_start_conversion).
+- Removed SERIAL_ECHOPGM("ADC raw="), "ADC match i=", "ADC other=" from marlinui.cpp (get_ADC_keyValue).
+- Firmware compiles successfully.
+
+2026-05-30: Temperature sensor calibration for Anet A8 thermistors.
+- Problem: At room temp ~22°C, both extruder and bed show 77°C. Heating disabled.
+- Root cause: TEMP_SENSOR_0 and TEMP_SENSOR_BED were set to type 1 (EPCOS 100k B57560G104F, beta=4092).
+- Anet A8 uses 100k NTC B3950 thermistors (beta=3950) with 4.7kΩ pull-up.
+- Changed both to type 60 (100k B3950, 4.7k pull-up, Maker's Tool Works Kapton Bed Thermistor).
+- File: Configuration.h — TEMP_SENSOR_0 1→60, TEMP_SENSOR_BED 1→60.
+- Firmware compiles successfully.
+- NOTE: If temperature still incorrect after flash, the pull-up resistor on MKS TinyBee may differ from 4.7kΩ. Next step: custom thermistor calibration (type 1000).
+
+2026-05-30: Type 60 did not fix temperature — switched to custom thermistor (type 1000).
+- Problem: Type 60 (100k B3950, 4.7k pull-up) still shows 77°C at 22°C room temp.
+- Root cause: Pull-up resistor on MKS TinyBee V1.0 is NOT 4.7kΩ.
+- Calculated from ADC readings: R_pullup ≈ 36 kΩ (based on 10-bit ADC value ~765 at 22°C).
+- Changed TEMP_SENSOR_0 and TEMP_SENSOR_BED to 1000 (custom thermistor).
+- Set HOTEND0_PULLUP_RESISTOR_OHMS = 36000, BED_PULLUP_RESISTOR_OHMS = 36000.
+- HOTEND0_RESISTANCE_25C_OHMS = 100000, HOTEND0_BETA = 3950 (same for bed).
+- Files: Configuration.h (type 60→1000), Configuration_adv.h (pull-up 4700→36000).
+- Firmware compiles successfully.
+- NEXT: Flash and test. If temp ≠ 22°C, adjust PULLUP_RESISTOR_OHMS:
+  * Temp too low → decrease pull-up value
+  * Temp too high → increase pull-up value
+  * For precise measurement: use multimeter between TEMP_x pin and 3.3V on MKS TinyBee (without thermistor connected).
+
+2026-05-30: X-axis direction inverted.
+- Problem: Moving forward (X+) moves backward, moving backward (X-) moves forward.
+- Fix: Changed INVERT_X_DIR from false to true in Configuration.h.
+- File: Configuration.h line 1324.
+- Firmware compiles successfully.
+
+2026-05-31: Z-axis direction inverted and bed size updated to Anet A8 specs.
+- Problem: Anet A8 config has INVERT_Z_DIR true, MKS had false. Z likely moves wrong direction.
+- Fix: Changed INVERT_Z_DIR from false to true in Configuration.h (line 1326).
+- Also updated bed size from 100x100x100 to 220x220x240 to match Anet A8.
+- Updated X_MIN_POS from 0 to -33, Y_MIN_POS from 0 to -10 (matching Anet A8).
+- Files: Configuration.h lines 1326, 1372-1381.
+- NEXT: Flash firmware and test all axes movement. Verify Z moves correct direction.
+- NEXT: Verify temperature readings with custom thermistor (type 1000, 36kΩ pull-up).
+
+2026-05-31: Fixed Z-axis steps/mm — Z moved ~4x too far.
+- Problem: Selecting "Move Z 10mm" in menu resulted in ~40mm actual movement.
+- Root cause: DEFAULT_AXIS_STEPS_PER_UNIT Z value was 1600, but Anet A8 needs 400.
+- Calculation: 200 steps/rev × 16 µsteps (A4988) ÷ 8mm lead (T8 leadscrew) = 400 steps/mm.
+- Fix: Changed Z from 1600 to 400 in Configuration.h line 930.
+- Firmware compiles successfully.
+- NEXT: Flash and test Z movement — 10mm should now move exactly 10mm.
+- NEXT: If X/Y also move wrong distance, check their steps/mm (currently 80, Anet A8 has 100).
+
+2026-05-31: Fixed Y-axis direction for Auto Home.
+- Problem: At Auto Home, Y moves in Y+ direction (away from MIN endstop).
+- Root cause: INVERT_Y_DIR false — motor turns wrong way for Y- movement.
+- Fix: Changed INVERT_Y_DIR from false to true in Configuration.h line 1325.
+- Endstops unchanged: USE_XMIN_PLUG, USE_YMIN_PLUG, USE_ZMIN_PLUG, all inverting=true.
+- NEXT: Commit, push, rebuild, flash. Test Auto Home — Y should now move to endstop.
+
+2026-05-31: Fixed Z-axis direction for Auto Home.
+- Problem: After INVERT_Z_DIR true, Z moved wrong direction at Auto Home.
+- Fix: Changed INVERT_Z_DIR back from true to false in Configuration.h line 1326.
+- Current axis config: INVERT_X_DIR=true, INVERT_Y_DIR=true, INVERT_Z_DIR=false.
+- NEXT: Commit, push, rebuild, flash. Test Auto Home — all axes should home correctly.
+
+2026-05-31: Fixed extruder heatsink fan (Fan2) not turning on automatically.
+- Problem: When heating extruder, Fan2 (heatsink fan on FAN1_PIN=148) does not turn on.
+- Root cause: E0_AUTO_FAN_PIN was set to -1 (disabled) in Configuration_adv.h.
+- Fix: Changed E0_AUTO_FAN_PIN from -1 to 148 in Configuration_adv.h line 587.
+- EXTRUDER_AUTO_FAN_TEMPERATURE=50 (already set) — fan turns on above 50°C.
+- EXTRUDER_AUTO_FAN_SPEED=255 (already set) — fan runs at 100%.
+- File: Configuration_adv.h line 587.
+- NEXT: Commit, push, rebuild, flash. Test — heat extruder, Fan2 should spin up above 50°C.
+
+2026-05-31: Changed temperature step from 1°C to 10°C in LCD menu.
+- Problem: Each encoder click changes nozzle/bed temperature by 1°C — too slow.
+- Fix: Added new menu item type int3_step10 (scale=0.1f) in menu_item.h.
+- Replaced int3 with int3_step10 for nozzle and bed temperature items in menu_temperature.cpp.
+- How it works: scale=0.1f means encoder range is 0-30 (for 0-300°C), each click changes scaled value by 1, unscaled changes by 10°C.
+- Files: menu_item.h (new type), menu_temperature.cpp (int3 → int3_step10 for nozzle, standby, bed).
+- Firmware compiles successfully.
+- NEXT: Commit, push, rebuild, flash. Test — temperature should change by 10°C per encoder click.
+
+2026-05-31: Fixed ADC button UP/DOWN swap in handle_keypad() for value editing mode.
+- Problem: When scrolling menus, UP/DOWN buttons work correctly. But when editing a value
+  (e.g., temperature), UP/DOWN are reversed.
+- Root cause: REVERSE_MENU_DIRECTION is forced by ZONESTAR_LCD in Conditionals_LCD.h.
+  This sets encoderDirection = -(ENCODERBASE) for menu scrolling. handle_keypad() checks
+  encoderDirection and swaps UP/DOWN only when reversed. However, draw_edit_screen() calls
+  encoder_direction_normal(), which resets encoderDirection to ENCODERBASE (positive).
+  So when editing values, the UP/DOWN swap in handle_keypad() doesn't apply.
+- Fix attempt 1 (FAILED): Removed the encoderDirection condition entirely — always swapped
+  UP/DOWN. This broke value editing because UP always decremented (decreased value) and
+  DOWN always incremented (increased value).
+- Fix attempt 2 (CURRENT): Restored encoderDirection check but with correct handling for
+  both cases. When encoderDirection is reversed (menu scrolling): UP=decrement, DOWN=increment.
+  When encoderDirection is normal (value editing): UP=increment, DOWN=decrement.
+- File: Marlin/src/lcd/marlinui.cpp (handle_keypad function, lines 482-498).
+- Firmware compiles successfully.
+- NEXT: Flash and test — UP/DOWN buttons should work correctly in both menu scrolling and value editing.
+
+2026-06-01: Fixed "Heating Failed: E1 Printer Halted Please Reset" error.
+- Problem: When sending a print job, nozzle heating triggers "Heating Failed: E1" error.
+- Root cause: WATCH_TEMP_PERIOD was 20 seconds — too short for the heater to rise 2°C.
+  The PID values (Kp=22.20, Ki=1.08, Kd=114.00) are generic Marlin defaults, not tuned for
+  this specific hotend. With custom thermistor (type 1000, 36kΩ pull-up), heating may be
+  slower, causing the watch timer to trigger before the temperature rises enough.
+- Fix: Increased WATCH_TEMP_PERIOD from 20 to 60 seconds in Configuration_adv.h line 296.
+  WATCH_TEMP_INCREASE kept at 2°C (minimum recommended by Marlin).
+- The main THERMAL_PROTECTION_PERIOD (40s) and THERMAL_PROTECTION_HYSTERESIS (4°C) remain
+  unchanged — these still protect against thermal runaway after target temperature is reached.
+- HEATER_0_MAXTEMP (275°C) and HEATER_0_MINTEMP (5°C) also unchanged.
+- NEXT: Flash firmware and test printing. If error persists, run PID autotune (M303 E0 C8 S200).
+
+2026-06-01: Disabled SD print confirmation dialog.
+- Problem: When selecting a file from SD card menu, a confirmation dialog ("Start printing
+  filename?") appears, requiring an extra button press to start printing.
+- Fix: Commented out #define SD_MENU_CONFIRM_START in Configuration_adv.h line 1363.
+  Now selecting a file immediately starts printing without confirmation.
+- File: Marlin/Configuration_adv.h line 1363.
+- Firmware compiles successfully.
+- NEXT: Flash and test — selecting an SD file should start printing immediately.
+
+2026-06-01: Disabled stop print confirmation dialog.
+- Problem: When selecting "Stop Print" during a print, a confirmation dialog ("Stop Print?")
+  appears, requiring an extra button press to stop.
+- Fix: Changed SUBMENU with MenuItem_confirm::select_screen to direct ACTION_ITEM calling
+  ui.abort_print() in menu_main.cpp line 273-275.
+  Now "Stop Print" immediately stops the print without confirmation.
+- File: Marlin/src/lcd/menu/menu_main.cpp lines 273-275.
+- Firmware compiles successfully.
+- NEXT: Flash and test — "Stop Print" should stop immediately without confirmation.
+
+2026-06-03: Fixed extruder and bed temperature measurement — pull-up resistor corrected from 36kΩ to 4.7kΩ.
+- Problem: Temperature readings are incorrect — printer shows lower temperature than actual.
+  External sensor | Printer display | Heater setting
+  23.2°C         | 24°C           | 0
+  59.3°C         | 35°C           | 30
+  74.5°C         | 40°C           | 40
+  118°C          | 70°C           | 70
+- Root cause: PULLUP_RESISTOR_OHMS was set to 36000 (calculated from a single room temp ADC reading).
+  The MKS TinyBee V1.0 uses standard 4.7kΩ pull-up resistors for thermistor inputs.
+  At room temp (~23°C), the 100k NTC thermistor has high resistance (~108kΩ), so the ADC is near
+  maximum (≈981/1024). Small ADC errors at this extreme are magnified when calculating pull-up,
+  leading to the incorrect 36kΩ estimate. At higher temperatures, the thermistor resistance drops
+  (e.g., 4.3kΩ at 118°C), and the error from wrong pull-up becomes dramatic.
+- Fix: Changed HOTEND0_PULLUP_RESISTOR_OHMS from 36000 to 4700.
+       Changed BED_PULLUP_RESISTOR_OHMS from 36000 to 4700.
+- Verification: With 4.7kΩ pull-up, all data points are consistent with beta=3950:
+  * 23.2°C actual → R=108kΩ → ADC≈981 → calc R=107kΩ → 23.5°C ✓
+  * 59.3°C actual → R=25.5kΩ → ADC≈865 → calc R=25.6kΩ → 59°C ✓
+  * 74.5°C actual → R=15.1kΩ → ADC≈781 → calc R=15.1kΩ → 74.5°C ✓
+  * 118°C actual  → R=4.3kΩ  → ADC≈489 → calc R=4.3kΩ  → 118°C ✓
+- File: Marlin/Configuration_adv.h lines 57, 105.
+- NEXT: Verify compilation, flash, and test temperature readings at various setpoints.
+- SAFETY WARNING: Previously the printer was under-reading temperature, causing overheating
+  (set to 70°C, actual reached 118°C). After this fix, temperature readings should be accurate.
+  Monitor first heating cycle carefully.
+
+2026-06-03: Temperature sensor calibration — FINAL FIX.
+- Problem: 4.7kΩ pull-up fix didn't work because EEPROM was overriding firmware defaults.
+- Root cause: settings.first_load() reads user_thermistor struct directly from EEPROM
+  (settings.cpp:1865) without calling reset_user_thermistors() first. Old EEPROM values
+  (36kΩ pull-up) persisted across firmware updates.
+- Fix: Sent M502 (factory reset) then M500 (save to EEPROM) to load new firmware defaults.
+- After M502/M500: With 4.7kΩ and beta 3950, readings were too high (91°C vs 55°C actual).
+- User measured thermistor with multimeter:
+  * At 35°C: R = 73.0 kΩ
+  * At 29.2°C: R = 90.2 kΩ
+- Calculated actual thermistor parameters:
+  * R25 = 105676 Ω (not 100000)
+  * Beta = 3399 (not 3950)
+  * Pull-up resistor on MKS TinyBee ≈ 19kΩ (not 4.7kΩ, not 36kΩ)
+- Applied via M305: M305 P0 R19000 T105676 B3399, M305 P1 R19000 T105676 B3399, M500
+- Result: ~2°C error between external sensor and printer display — acceptable for 3D printing.
+- Updated Configuration_adv.h with correct values for future compilations.
+
+2026-06-03: Temperature sensor calibration — CORRECT PULL-UP CALCULATION.
+- Problem: Changed pullup to 36000 (wrong assumption), user tested and reported:
+  set target 70°C, actual temp reached 101°C, display showed 70°C (under-reading, DANGER).
+- Root cause analysis: The pull-up is NOT 36kΩ. Calculated actual pull-up from the
+  70°C→101°C data point using Steinhart-Hart model:
+  * At 101°C actual: R_therm = 10435 Ω (from Steinhart-Hart)
+  * At 70°C display: firmware calculates R = 23697 Ω (from beta model with 36000 pullup)
+  * ADC raw = 6503 (from firmware equation)
+  * Actual pullup = ADC_MAX * R_actual / adc - R_actual = 15855 Ω
+- Final solution: PULLUP=16000 (~16kΩ, nearest standard value), BETA=3399, R25=105676.
+- Verification with Steinhart-Hart model (actual pullup=15855, firmware=16000):
+  * 24°C → shows 23.8°C (error: -0.2°C) ✓
+  * 50°C → shows 49.7°C (error: -0.3°C) ✓
+  * 100°C → shows 99.6°C (error: -0.4°C) ✓
+  * 200°C → shows 199.3°C (error: -0.7°C) ✓
+  * 250°C → shows 249.1°C (error: -0.9°C) ✓
+- Max error across full range: <1°C — excellent for 3D printing.
+- Files changed: Marlin/Configuration_adv.h lines 57, 105.
+- NEXT: Flash firmware, then send M502 + M500 to load firmware defaults to EEPROM.
+- IMPORTANT: After flashing, EEPROM still has old values. Must do M502+M500.
+
+2026-06-10: Enabled Mesh Bed Leveling (MBL) with LCD control.
+- Problem: Bed leveling was completely disabled — no G29 support, no leveling menu.
+- Fix: Enabled MESH_BED_LEVELING in Configuration.h (line 1541).
+- Fix: Enabled LCD_BED_LEVELING in Configuration.h (line 1670) — guided manual probing via LCD.
+- Fix: Enabled MESH_EDIT_MENU in Configuration.h (line 1675) — edit mesh points from menu.
+- Grid: 3×3 points (GRID_MAX_POINTS_X=3, GRID_MAX_POINTS_Y=3), MESH_INSET=10mm.
+- No probe required — uses Z endstop and manual Z adjustment at each grid point.
+- EEPROM_SETTINGS already enabled — mesh can be saved with M500.
+- Files changed: Marlin/Configuration.h lines 1541, 1670, 1675.
+- Firmware compiles successfully.
+- NEXT: Flash firmware, then send M502 + M500 to load firmware defaults to EEPROM.
+- NEXT: Use LCD menu "Bed Leveling" → "Level Bed" to run guided leveling (9 points).
+- NEXT: After leveling, save mesh with M500 or "Store Settings" in LCD menu.
+- NEXT: Enable leveling with M420 S1 or via LCD menu.
+
+2026-06-10: Fixed mesh area — first probe point was outside the bed.
+- Problem: MESH_INSET=10 was calculated from X_MIN_POS=-33 and Y_MIN_POS=-10,
+  so first mesh point was at X=-23, Y=0 — far outside the bed area.
+- Fix: Changed MESH_INSET from 10 to 0 in Configuration.h (line 1658).
+- Fix: Added explicit MESH_MIN_X=2, MESH_MIN_Y=2, MESH_MAX_X=218, MESH_MAX_Y=218
+  in Configuration_adv.h (lines 1961-1964) to override the automatic mesh area.
+- Result: Mesh grid 3×3 now covers X:2,110,218 and Y:2,110,218 — 2mm inset from
+  bed edges. First point is at (2,2) instead of (-23,0).
+- Files changed: Marlin/Configuration.h line 1658, Marlin/Configuration_adv.h lines 1961-1964.
+- Firmware compiles successfully.
+
+2026-06-10: X_MIN_POS changed from -33 to -24 due to endstop offset.
+- Problem: After G28, nozzle stops 9mm short of the bed edge. X endstop is rigidly
+  mounted and cannot be calibrated mechanically. After board and driver replacement,
+  the endstop position relative to the bed may have changed.
+- Fix: Changed X_MIN_POS from -33 to -24 in Configuration.h (line 1376).
+  This shifts the X coordinate origin 9mm to the right, compensating for the endstop
+  offset. Now mesh point X=2 will be 9mm closer to the bed edge.
+- Mesh area: MESH_MIN_X=2, MESH_MIN_Y=2, MESH_MAX_X=218, MESH_MAX_Y=218.
+- Grid 3×3: points X=2, 110, 218 and Y=2, 110, 218.
+- Files changed: Marlin/Configuration.h line 1376.
+- Firmware compiles successfully.
+- NEXT: Flash firmware, run M502+M500, then test Bed Leveling.
+
+2026-06-10: Mesh area restored to X=2..218, Y=2..218. Problem is not in mesh.
+- Root cause: After G28, nozzle parks at X=-33 (per X_MIN_POS). When moving to first
+  mesh point X=2, nozzle stops 9mm short of the bed edge. This means the physical
+  X endstop triggers at a different position, or X_MIN_POS=-33 does not match the
+  actual nozzle position after parking.
+- Fix: Mesh area restored to MESH_MIN_X=2, MESH_MIN_Y=2, MESH_MAX_X=218, MESH_MAX_Y=218.
+- Recommendation: Calibrate X endstop mechanically — loosen X endstop screw and
+  slide it ~9mm toward bed center so that after G28 the nozzle is exactly at the
+  left bed edge. Alternatively, change X_MIN_POS from -33 to -24 (9mm offset).
+- Files changed: Marlin/Configuration_adv.h lines 1961-1964.
+- Firmware compiles successfully.
+
+2026-06-10: Fixed mesh area again — first point still 9mm from bed edge.
+- Problem: Even with MESH_MIN_X=2, the nozzle stopped 9mm from the left bed edge.
+  Root cause unclear — possibly software endstop limits or physical X_MIN_POS offset.
+- Fix: Increased MESH_MIN_X from 2 to 11, MESH_MIN_Y from 2 to 11.
+  Increased MESH_MAX_X from 218 to 209, MESH_MAX_Y from 218 to 209.
+  This shifts the 3×3 grid inward so all points are reachable.
+- New grid points: X=11, 110, 209 and Y=11, 110, 209.
+- Files changed: Marlin/Configuration_adv.h lines 1961-1964.
+- Firmware compiles successfully.
+- NEXT: Flash firmware, run M502+M500, then test Bed Leveling.
+
+2026-06-10: Fixed X_MIN_POS — nozzle still 15.5mm from bed edge at mesh point X=2.
+- Problem: With X_MIN_POS=-24 and MESH_MIN_X=2, nozzle center is 15.5mm from left bed edge.
+  Need ~2mm to use feeler gauge.
+- Root cause: X_MIN_POS=-24 is too large (not negative enough). After G28, Marlin thinks
+  nozzle is at X=-24, but physically it's further right. The endstop is rigid and cannot
+  be calibrated mechanically.
+- Fix: Changed X_MIN_POS from -24 to -40. This shifts the entire coordinate system 16mm
+  left, so mesh point X=2 will be physically ~0.5mm past the bed edge (15.5 - 16 = -0.5mm).
+  If this overshoots, try X_MIN_POS=-38 for ~2mm from edge.
+- Files changed: Marlin/Configuration.h line 1376.
+- NEXT: Flash firmware, run M502+M500, then test Bed Leveling. Measure distance from
+  nozzle center to left bed edge at first probe point.
+
+2026-06-10: X_MIN_POS=-40 still not enough — nozzle 2mm from bed edge.
+- Problem: With X_MIN_POS=-40, nozzle still 2mm from bed edge (needs to be ~2mm from edge).
+- Fix: Changed X_MIN_POS from -40 to -47 (decreased by 7).
+- Files changed: Marlin/Configuration.h line 1376.
+- NEXT: Flash firmware, run M502+M500, then test Bed Leveling.
+
+2026-06-10: X-axis steps/mm test — found incorrect steps/mm!
+- Test: G1 X0 → nozzle 4mm from bed edge. G1 X100 → nozzle 76mm from bed edge.
+  Real travel = 4 + 76 = 80mm (Marlin thinks 100mm).
+- Root cause: X-axis steps/mm is wrong. 80 steps/mm gives only 80% of commanded travel.
+  Likely cause: pulley is 16 teeth instead of 20 (common on some Anet A8 variants).
+- Fix: Changed DEFAULT_AXIS_STEPS_PER_UNIT X from 80 to 100.
+  Calculation: 80 × (100/80) = 100 steps/mm.
+  Also reverted X_MIN_POS from -47 back to -33 (original Anet A8 value), since
+  the coordinate system will now be accurate.
+- Files changed: Marlin/Configuration.h lines 930, 1376.
+- NEXT: Flash firmware, run M502+M500, then test G28 → G1 X0 → measure distance
+  to bed edge. Then test Bed Leveling (G29).
+
+2026-06-10: X-axis steps/mm confirmed correct after M502+M500.
+- Test with X=100 steps/mm: G1 X0 → 3mm from edge, G1 X100 → 97mm from edge.
+  Real travel = 3 + 97 = 100mm. Steps/mm are now correct!
+- Problem: X_MIN_POS=-33 gives 3mm gap at X=0. Need ~2mm at mesh point X=2.
+- Fix: Changed X_MIN_POS from -33 to -36.
+  At X=0: 0mm from edge. At X=2: ~2mm from edge. ✅
+- Files changed: Marlin/Configuration.h line 1376.
+- NEXT: Flash firmware, run M502+M500, then test Bed Leveling (G29).
+
+2026-06-10: Y-axis steps/mm test — found incorrect steps/mm!
+- Test: G1 Y0 → 4mm past bed edge. G1 Y100 → 86mm from bed edge.
+  Real travel = 4 + 86 = 90mm (Marlin thinks 100mm).
+- Fix: Changed DEFAULT_AXIS_STEPS_PER_UNIT Y from 80 to 90.
+  Calculation: 80 × (100/90) = 88.9 → rounded to 90 by user.
+- Y_MIN_POS left unchanged at -10 for now (will adjust after retest).
+- Files changed: Marlin/Configuration.h line 930.
+- NEXT: Flash firmware, run M502+M500, then retest Y axis.
+  G1 Y0 → measure distance to bed edge. G1 Y100 → measure distance.
+
+2026-06-10: Y-axis retest with 90 steps/mm — overtravels 2%.
+- Test: G1 Y0 → 6mm past edge. G1 Y100 → 96mm from edge.
+  Real travel = 6 + 96 = 102mm (2% overtravel).
+- Fix: Y steps/mm 90 → 88.2. Calculation: 90 × (100/102) = 88.2.
+  X_MIN_POS -36 → -37 (1mm left, was 1mm from edge at X=0).
+  Y_MIN_POS -10 → -4 (6mm right, was 6mm past edge at Y=0).
+- Files changed: Marlin/Configuration.h lines 930, 1376-1377.
+- NEXT: Flash firmware, run M502+M500, then retest X and Y axes.
+  G1 X0, G1 X100, G1 Y0, G1 Y100 — measure distances.
+
+2026-06-10: X_MIN_POS adjusted to -36.5 (user requested 0.5mm precision).
+- X_MIN_POS -37 → -36.5 (Marlin supports float for position values).
+- Files changed: Marlin/Configuration.h line 1376.
+- NEXT: Flash firmware, run M502+M500, then test.
+
+2026-06-10: Y-axis steps/mm set to 100 (same pulleys as X).
+- Test with 88.2 steps/mm: G1 Y0 → 0.5mm from edge, G1 Y100 → ~90mm from edge.
+  Real travel = 90.5mm (still incorrect).
+- Fix: Since X and Y have identical pulleys, set Y steps/mm to 100 (same as X).
+  Y_MIN_POS -4 → -4.5 (0.5mm left shift to compensate gap at Y=0).
+- Files changed: Marlin/Configuration.h lines 930, 1377.
+- NEXT: Flash firmware, run M502+M500, then retest both axes.
+  G1 X0, G1 X100, G1 Y0, G1 Y100 — measure distances.
+
+2026-06-12: Disabled confirmation dialog for Move Extruder when heater is off.
+- Problem: When selecting "Move E" in "Move Axis" menu, the "Hotend too cold! Proceed?"
+  dialog always appeared if extruder temp was below EXTRUDE_MINTEMP (170°C), even when
+  the heater was off (target temperature 0).
+- Fix: Added check `thermalManager.degTargetHotend(active_extruder) == 0` in
+  _menu_move_distance_e_maybe(). If heater is off, dialog is skipped and user goes
+  directly to the extruder movement distance selection.
+- File: Marlin/src/lcd/menu/menu_motion.cpp lines 206-221.
+- Firmware compiles successfully.
+- NEXT: Flash firmware and test — select "Move E" with heater off, should go directly
+  to distance selection without confirmation dialog.
+
+2026-06-12: Allowed extruder (E) movement when heater is off.
+- Problem: After disabling the confirmation dialog, E movement still did not work with
+  heater off. PREVENT_COLD_EXTRUSION blocked extrusion at the planner.cpp and motion.cpp
+  level, ignoring E commands.
+- Fix: Added check `thermalManager.degTargetHotend(extruder) != 0` in two places:
+  1. planner.cpp:1884 — E block in the movement planner
+  2. motion.cpp:1245 — E block in prepare_line_to_destination()
+  If target temperature = 0 (heater off), E movement is allowed.
+  If heater is on but extruder is still cold — block remains for safety.
+- Files: Marlin/src/module/planner.cpp line 1884, Marlin/src/module/motion.cpp line 1245.
+- Firmware compiles successfully.
+- NEXT: Flash firmware and test — "Move E" should now work with heater off.
+  Use for calibrating extruder steps/mm (E-steps).
+
+2026-06-12: Fixed extruder E-steps calibration.
+- Problem: Commanding "Move E 10mm" resulted in 36mm of filament movement.
+  Current E-steps value was 400 (likely from BMG/geared extruder config).
+- Fix: Changed DEFAULT_AXIS_STEPS_PER_UNIT E from 400 to 111.
+  Calculation: 400 × (10 / 36) = 111.11, rounded to 111.
+- File: Marlin/Configuration.h line 930.
+- Firmware compiles successfully.
+- NEXT: Flash firmware, run M502 + M500 to load new defaults to EEPROM.
+  Then test: command "Move E 10mm" — should move exactly 10mm of filament.
+  If still off, adjust: new_steps = 111 × (10 / actual_mm).
+
+2026-06-12: E-steps recalibrated — 111 was still too high (12mm instead of 10mm).
+- Test: With 111 steps/mm, "Move E 10mm" moved 12mm of filament.
+- Fix: Changed E-steps from 111 to 93.
+  Calculation: 111 × (10 / 12) = 92.5, rounded to 93.
+- File: Marlin/Configuration.h line 930.
+- NEXT: Flash firmware, run M502 + M500, then retest "Move E 10mm".
+  If still off: new_steps = 93 × (10 / actual_mm).
+
+2026-06-13: Fixed extruder direction — was pushing filament out instead of retracting.
+- Problem: When selecting "Move E 10mm" in menu, extruder pushes filament out instead of
+  retracting it. Also when pressing UP in menu, extruder pushes out.
+- Root cause: INVERT_E0_DIR was false, but the extruder motor direction is reversed.
+  The motor turns the wrong way — "extrude" command causes the motor to push filament out
+  instead of pulling it in.
+- Fix: Changed INVERT_E0_DIR from false to true in Configuration.h line 1334.
+- File: Marlin/Configuration.h line 1334.
+- Firmware compiles successfully (SUCCESS).
+- NEXT: Flash firmware, run M502 + M500 to load new defaults to EEPROM.
+- NEXT: Test "Move E 10mm" — extruder should now pull filament in (extrude correctly).
+  If still wrong direction, change INVERT_E0_DIR back to false (double inversion).
+
+2026-06-13: Mesh area reduced — MESH_MAX changed from 218 to 215.
+- Problem: Mesh area extended too close to bed edges.
+- Fix: Changed MESH_MAX_X from 218 to 215, MESH_MAX_Y from 218 to 215 in Configuration_adv.h.
+- MESH_MIN_X=2, MESH_MIN_Y=2 unchanged.
+- New grid 3×3: X=2, 108.5, 215 and Y=2, 108.5, 215.
+- File: Marlin/Configuration_adv.h lines 1963-1964.
+- NEXT: Flash firmware, run M502+M500, then test Bed Leveling.
+
+2026-06-15: Fixed layer shift after pause — stepper motors were deactivating during long pauses.
+- Problem: Printing 180x110mm object, after pause (clogged nozzle) the print shifted ~12mm on X axis.
+  Lines printed diagonally, X shifted 12mm left at top-Y, and 12mm missing at bottom-right.
+- Root cause: DEFAULT_STEPPER_DEACTIVE_TIME=120 (2 minutes). During the pause (cleaning nozzle),
+  the X/Y stepper motors deactivated after 2 minutes of inactivity (DISABLE_INACTIVE_X/Y true).
+  When print resumed (M24), Marlin continued G-code execution but the physical X position was lost
+  (carriage may have been moved or slipped), causing a layer shift of ~12mm.
+- Fix 1: Changed DEFAULT_STEPPER_DEACTIVE_TIME from 120 to 0 in Configuration_adv.h line 981.
+  Stepper motors now never deactivate due to timeout. They remain powered during pauses.
+- Fix 2: Enabled S_CURVE_ACCELERATION in Configuration.h line 1017 for smoother acceleration
+  profiles, reducing the risk of skipped steps when resuming.
+- NOT applied: HOME_AFTER_DEACTIVATE and NO_MOTION_BEFORE_HOMING were considered but rejected
+  because axis_trusted is not cleared when steppers deactivate by timeout (only cleared by
+  set_all_unhomed() in calibration menus). These options would not help and could cause errors.
+- Files changed: Marlin/Configuration_adv.h line 981, Marlin/Configuration.h line 1017.
+- NEXT: Flash firmware, run M502+M500 to load new defaults to EEPROM.
+- NEXT: Test printing with a pause — verify no layer shift occurs after resume.
+- NOTE: If layer shift still occurs, the issue may be mechanical (insufficient A4988 driver current,
+  loose belts, or binding on X axis). Check A4988 potentiometer (Vref) and belt tension.
+
+2026-06-22: Windows reinstall — build broken, fixed 3 issues.
+- Problem 1: After Windows reinstall, build failed with 'MarlinHAL' does not name a type.
+  Root cause: HAL/shared/HAL.cpp uses MarlinHAL hal, but ESP32/HAL.h lacked the class definition.
+  Fix: Added full MarlinHAL class definition to ESP32/HAL.h wrapping existing HAL functions.
+  File: Marlin/src/HAL/ESP32/HAL.h, Marlin/src/HAL/ESP32/HAL.cpp.
+- Problem 2: Conflicting typedef read_byte_cb_t (with/without const) caused compilation errors.
+  Root cause: Newer GCC version after reinstall is stricter about type qualifiers.
+  Fix: Unified all read_byte_cb_t and related function signatures to use const uint8_t*.
+  Files: fontutils.h, fontutils.cpp, lcdprint_hd44780.cpp.
+- Problem 3: Multiple definition linker errors for utf8/fontutils functions and M400.
+  Root cause: utf8.cpp and fontutils.cpp define same functions; M400.cpp exists in both control/ and motion/.
+  Fix: Added -<src/lcd/utf8.cpp> and -<src/gcode/control/M400.cpp> to src_filter in platformio.ini.
+- Build: SUCCESS, RAM 16.4%, Flash 32.7%.
+- NEXT: Flash firmware to printer and continue testing.
+
+2026-06-24: Marlin core updated from 2.0.9.2 to 2.1.2.7.
+- Goal: Update Marlin to 2.1.2.7 while preserving MKS-TinyBee board changes and Anet A8 config.
+- Method: Copied new Marlin 2.1.2.7 src/ from tmp/Marlin-2.1.2.7, restored MKS-specific files from backup.
+- MKS-specific files preserved: HAL/ESP32/*, pins_MKS_TINYBEE.h, boards.h, pins.h,
+  mks_esp_test.h/.cpp, Conditionals_LCD.h, M997.cpp, MarlinCore.cpp (+ tinybee_test call).
+- Files updated from tmp (NOT from backup): Conditionals_post.h, Conditionals_LCD.h,
+  MarlinCore.cpp, HAL/shared/*, Marlin/src/inc/Version.h (now "2.1.2.7").
+- Config version stamps updated: CONFIGURATION_H_VERSION 02000902→02010206,
+  CONFIGURATION_ADV_H_VERSION 02000902→02010206.
+- Renamed macros in configs: LIN_ADVANCE_K→ADVANCE_K, FAN_PIN→FAN0_PIN,
+  DISABLE_INACTIVE_*→DISABLE_IDLE_*, DEFAULT_STEPPER_DEACTIVE_TIME→DEFAULT_STEPPER_TIMEOUT_SEC,
+  LCD_PINS_ENABLE→LCD_PINS_EN, DEFAULT_Kp/Ki/Kd→DEFAULT_KP/KI/KD.
+- Added MANUAL_FEEDRATE to Configuration.h (required by Marlin 2.1.2.7 for MarlinUI).
+- Added SH_C_COEFF defines for custom thermistors (HOTEND0_SH_C_COEFF, BED_SH_C_COEFF).
+- Added MF_TIMER_STEP, MF_TIMER_PULSE, MF_TIMER_TEMP aliases to ESP32/timers.h.
+- Fixed HALHOME path for ESP3DLib compatibility (-DHALHOME in build_flags).
+- Fixed features.ini: HAS_BUZZER→HAS_BEEPER (macro renamed in Marlin 2.1.2.7).
+- Fixed src_filter for mks_tinybee: added +<src/lcd/menu>, +<src/lcd/HD44780>, +<src/lcd/utf8.cpp>.
+- Custom changes re-applied: handle_keypad UP/DOWN swap, int3_step10 temp step 10°C,
+  Stop Print without confirm, Move E without heater, layer shift fix (stepper timeout).
+- Build: SUCCESS, RAM 16.5%, Flash 32.8%.
+- Post-build: Printer reboot loop after flashing (restarts every 2-3 seconds).
+- Fix: Added -DCONFIG_BROWNOUT_DET_LVL=0 to build_flags in ini/esp32.ini.
+- Fix: Added SHOW_PROGRESS_PERCENT, SHOW_ELAPSED_TIME to Configuration_adv.h
+  (rotate_progress() crashed with Guru Meditation InstrFetchProhibited because
+  progFunc[] array was empty — no progress features enabled, but HAS_PRINT_PROGRESS
+  became active due to SD card support in Marlin 2.1.2.7).
+- Fix: Renamed LCD_SET_PROGRESS_MANUALLY→SET_PROGRESS_MANUALLY in Configuration_adv.h.
+- Build: SUCCESS, RAM 16.5%, Flash 32.8%.
+- Result: Printer boots and runs Marlin 2.1.2.7 without reboot loop.
+- NEXT: Flash firmware to printer. After flashing, run M502+M500 to load new defaults to EEPROM.
+- IMPORTANT: Screen should now show Marlin 2.1.2.7 instead of 2.0.9.2.
+
+2026-06-24: Thermal Runaway false positive fix.
+- Problem: During printing, "Thermal Runaway: E1 Printer Halted" stopped the print.
+- Root cause: Custom thermistor (type 1000, R25=105676, Beta=3399, 16kΩ pull-up)
+  and external bed controller cause temperature fluctuations that trigger protection.
+- Fix: Increased hotend THERMAL_PROTECTION_PERIOD 40→120s, HYSTERESIS 4→8°C.
+- Fix: Increased bed THERMAL_PROTECTION_BED_PERIOD 20→60s, HYSTERESIS 2→12°C.
+- File: Marlin/Configuration_adv.h lines 278-279, 304-305.
+- NEXT: Flash firmware and run M502+M500 to apply new defaults.

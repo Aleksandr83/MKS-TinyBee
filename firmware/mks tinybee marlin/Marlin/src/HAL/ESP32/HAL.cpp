@@ -68,6 +68,9 @@ portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 uint16_t HAL_adc_result;
 
+// Define the static member of MarlinHAL
+uint16_t MarlinHAL::adc_result;
+
 // ------------------------
 // Private Variables
 // ------------------------
@@ -197,6 +200,7 @@ void HAL_adc_init() {
   TERN_(HAS_TEMP_CHAMBER, adc1_set_attenuation(get_channel(TEMP_CHAMBER_PIN), ADC_ATTEN_11db));
   TERN_(HAS_TEMP_COOLER, adc1_set_attenuation(get_channel(TEMP_COOLER_PIN), ADC_ATTEN_11db));
   TERN_(FILAMENT_WIDTH_SENSOR, adc1_set_attenuation(get_channel(FILWIDTH_PIN), ADC_ATTEN_11db));
+  TERN_(HAS_ADC_BUTTONS, adc1_set_attenuation(get_channel(ADC_KEYPAD_PIN), ADC_ATTEN_11db));
 
   // Note that adc2 is shared with the WiFi module, which has higher priority, so the conversion may fail.
   // That's why we're not setting it up here.
@@ -214,8 +218,7 @@ void HAL_adc_start_conversion(const uint8_t adc_pin) {
   const adc1_channel_t chan = get_channel(adc_pin);
   uint32_t mv;
   esp_adc_cal_get_voltage((adc_channel_t)chan, &characteristics[attenuations[chan]], &mv);
-  // HAL_adc_result = mv * 1023.0 / 3300.0;
-  HAL_adc_result = mv * 1023.0 / 2570.0;
+  HAL_adc_result = mv * 1023.0 / 3300.0;
 
   // Change the attenuation level based on the new reading
   adc_atten_t atten;

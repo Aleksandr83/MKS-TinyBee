@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -36,7 +36,7 @@ constexpr DGUS_Addr LIST_HOME[] PROGMEM = {
   (DGUS_Addr)0
 };
 
-#if ENABLED(SDSUPPORT)
+#if HAS_MEDIA
   constexpr DGUS_Addr LIST_PRINT[] PROGMEM = {
     DGUS_Addr::SD_Type,
     DGUS_Addr::SD_FileName0,
@@ -210,7 +210,7 @@ constexpr DGUS_Addr LIST_WAIT[] PROGMEM = {
 
 const struct DGUS_ScreenAddrList screen_addr_list_map[] PROGMEM = {
   MAP_HELPER(DGUS_Screen::HOME,                 LIST_HOME),
-  #if ENABLED(SDSUPPORT)
+  #if HAS_MEDIA
     MAP_HELPER(DGUS_Screen::PRINT,              LIST_PRINT),
   #endif
   MAP_HELPER(DGUS_Screen::PRINT_STATUS,         LIST_PRINT_STATUS),

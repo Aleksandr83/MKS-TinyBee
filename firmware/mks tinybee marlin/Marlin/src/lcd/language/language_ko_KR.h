@@ -39,7 +39,7 @@ namespace Language_ko_KR {
   LSTR MSG_MEDIA_REMOVED                  = _UxGT("카드 제거됨");
   LSTR MSG_LCD_ENDSTOPS                   = _UxGT("엔드스탑");
   LSTR MSG_LCD_SOFT_ENDSTOPS              = _UxGT("소프트 엔드스탑");
-  LSTR MSG_MAIN                           = _UxGT("뒤로");
+  LSTR MSG_MAIN_MENU                      = _UxGT("뒤로");
   LSTR MSG_ADVANCED_SETTINGS              = _UxGT("고급 설정");
   LSTR MSG_CONFIGURATION                  = _UxGT("설정");
   LSTR MSG_RUN_AUTO_FILES                 = _UxGT("자동 시작");
@@ -54,7 +54,7 @@ namespace Language_ko_KR {
   LSTR MSG_LEVEL_BED_WAITING              = _UxGT("누르면 시작합니다");
   LSTR MSG_LEVEL_BED_NEXT_POINT           = _UxGT("다음 Point");
   LSTR MSG_LEVEL_BED_DONE                 = _UxGT("레벨링 완료!");
-  #if PREHEAT_COUNT
+  #if HAS_PREHEAT
     LSTR MSG_PREHEAT_1                    = _UxGT("예열하기 - ") PREHEAT_1_LABEL;
     LSTR MSG_PREHEAT_1_H                  = _UxGT("예열하기 - ") PREHEAT_1_LABEL " ~";
     LSTR MSG_PREHEAT_1_END                = _UxGT("예열하기 - ") PREHEAT_1_LABEL _UxGT(" 노즐");

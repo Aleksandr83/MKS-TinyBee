@@ -22,7 +22,7 @@
 
 #include "../../../inc/MarlinConfigPre.h"
 
-#if BOTH(HAS_TFT_LVGL_UI, HAS_STEALTHCHOP)
+#if ALL(HAS_TFT_LVGL_UI, HAS_STEALTHCHOP)
 
 #include "draw_ui.h"
 #include <lv_conf.h>
@@ -122,7 +122,7 @@ void lv_draw_tmc_step_mode_settings() {
     lv_big_button_create(scr, "F:/bmp_back70x40.bin", machine_menu.previous, PARA_UI_TURN_PAGE_POS_X, PARA_UI_TURN_PAGE_POS_Y, event_handler, ID_TMC_MODE_UP, true);
   }
 
-  lv_big_button_create(scr, "F:/bmp_back70x40.bin", common_menu.text_back, PARA_UI_BACL_POS_X, PARA_UI_BACL_POS_Y, event_handler, ID_TMC_MODE_RETURN, true);
+  lv_big_button_create(scr, "F:/bmp_back70x40.bin", common_menu.text_back, PARA_UI_BACK_POS_X, PARA_UI_BACK_POS_Y, event_handler, ID_TMC_MODE_RETURN, true);
 }
 
 void lv_clear_tmc_step_mode_settings() {

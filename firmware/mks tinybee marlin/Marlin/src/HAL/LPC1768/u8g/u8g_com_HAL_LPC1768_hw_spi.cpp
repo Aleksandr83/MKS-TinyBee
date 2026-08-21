@@ -79,7 +79,6 @@ uint8_t u8g_com_HAL_LPC1768_hw_spi_fn(u8g_t *u8g, uint8_t msg, uint8_t arg_val, 
       u8g_SetPILevel(u8g, U8G_PI_CS, 1);
       u8g_SetPILevel(u8g, U8G_PI_A0, 1);
       u8g_SetPILevel(u8g, U8G_PI_RESET, 1);
-      
       u8g_SetPIOutput(u8g, U8G_PI_CS);
       u8g_SetPIOutput(u8g, U8G_PI_A0);
       u8g_SetPIOutput(u8g, U8G_PI_RESET);
@@ -126,5 +125,4 @@ uint8_t u8g_com_HAL_LPC1768_hw_spi_fn(u8g_t *u8g, uint8_t msg, uint8_t arg_val, 
 }
 
 #endif // HAS_MARLINUI_U8GLIB
-
 #endif // TARGET_LPC1768

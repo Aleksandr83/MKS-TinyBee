@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -80,7 +80,7 @@ const struct DGUS_VP vp_list[] PROGMEM = {
   VP_HELPER_RX(DGUS_Addr::SCREENCHANGE_Idle,     &DGUSRxHandler::ScreenChange),
   VP_HELPER_RX(DGUS_Addr::SCREENCHANGE_Printing, &DGUSRxHandler::ScreenChange),
 
-  #if ENABLED(SDSUPPORT)
+  #if HAS_MEDIA
     VP_HELPER_RX(DGUS_Addr::SD_SelectFile,   &DGUSRxHandler::SelectFile),
     VP_HELPER_RX(DGUS_Addr::SD_Scroll,       &DGUSRxHandler::Scroll),
     VP_HELPER_RX_NODATA(DGUS_Addr::SD_Print, &DGUSRxHandler::PrintFile),
@@ -102,7 +102,7 @@ const struct DGUS_VP vp_list[] PROGMEM = {
   VP_HELPER_RX(DGUS_Addr::TEMP_Preset,        &DGUSRxHandler::TempPreset),
   VP_HELPER_RX(DGUS_Addr::TEMP_SetTarget_Bed, &DGUSRxHandler::TempTarget),
   VP_HELPER_RX(DGUS_Addr::TEMP_SetTarget_H0,  &DGUSRxHandler::TempTarget),
-  #if HOTENDS > 1
+  #if HAS_MULTI_HOTEND
     VP_HELPER_RX(DGUS_Addr::TEMP_SetTarget_H1,  &DGUSRxHandler::TempTarget),
   #endif
   VP_HELPER_RX(DGUS_Addr::TEMP_Cool,          &DGUSRxHandler::TempCool),
@@ -151,7 +151,7 @@ const struct DGUS_VP vp_list[] PROGMEM = {
 
   // WRITE-ONLY VARIABLES
 
-  #if ENABLED(SDSUPPORT)
+  #if HAS_MEDIA
     VP_HELPER_TX(DGUS_Addr::SD_Type, &DGUSTxHandler::FileType),
     VP_HELPER_TX_SIZE(DGUS_Addr::SD_FileName0,
                       DGUS_FILENAME_LEN,
@@ -178,7 +178,7 @@ const struct DGUS_VP vp_list[] PROGMEM = {
                     nullptr,
                     &DGUSTxHandler::PositionZ),
   VP_HELPER(DGUS_Addr::STATUS_Ellapsed,
-            DGUS_ELLAPSED_LEN,
+            DGUS_ELAPSED_LEN,
             VPFLAG_AUTOUPLOAD,
             nullptr,
             nullptr,
@@ -217,7 +217,7 @@ const struct DGUS_VP vp_list[] PROGMEM = {
                     &thermalManager.temp_hotend[ExtUI::heater_t::H0].target,
                     &DGUSTxHandler::ExtraToInteger<int16_t>),
   VP_HELPER_TX(DGUS_Addr::TEMP_Max_H0, &DGUSTxHandler::TempMax),
-  #if HOTENDS > 1
+  #if HAS_MULTI_HOTEND
     VP_HELPER_TX_AUTO(DGUS_Addr::TEMP_Current_H1,
                       &thermalManager.temp_hotend[ExtUI::heater_t::H1].celsius,
                       &DGUSTxHandler::ExtraToInteger<float>),

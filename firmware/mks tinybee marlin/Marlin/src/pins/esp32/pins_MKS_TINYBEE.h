@@ -105,7 +105,7 @@
 #define HEATER_0_PIN                         145
 #ifndef MKS_TEST
 #define HEATER_1_PIN                         146
-#define FAN_PIN                              147
+#define FAN0_PIN                             147
 #define FAN1_PIN                             148
 #endif
 #define HEATER_BED_PIN                       144
@@ -164,7 +164,7 @@
 
   #define BEEPER_PIN                          149
   #define BTN_ENC                             13
-  #define LCD_PINS_ENABLE                     21
+  #define LCD_PINS_EN                     21
   #define LCD_PINS_RS                         4
   #define BTN_EN1                             14
   #define BTN_EN2                             12
@@ -194,7 +194,50 @@
     #if SD_CONNECTION_IS(ONBOARD)
       #define FORCE_SOFT_SPI
     #endif
-  #else // !MKS_MINI_12864
+  #elif ENABLED(ZONESTAR_LCD)
+
+    #define LCD_PINS_D4                     0
+    #define LCD_PINS_D5                     16
+    #define LCD_PINS_D6                     15
+    #define LCD_PINS_D7                     17
+    #define ADC_KEYPAD_PIN                  35
+
+    //
+    // Custom ADC keypad configuration for MKS TinyBee
+    // When connecting ADC_KEYBOARD from ZONESTAR LCD to J40 (MT_DET pin),
+    // there is a 1kΩ resistor between IO35 (ADC_KEYPAD_PIN) and MT_DET (3.3V).
+    // This creates a parallel pull-up network:
+    //   - LCD internal pull-up: 4.7kΩ to 5V
+    //   - External resistor: 1kΩ to 3.3V (MT_DET)
+    // Equivalent Thevenin: R_pullup_eq ≈ 0.82kΩ, Vth ≈ 3.6V
+    //
+    // Override ADC_BUTTONS_R_PULLUP to account for the parallel 1kΩ resistor.
+    // Formula: R_eq = (4.7 * 1.0) / (4.7 + 1.0) = 0.8246 kΩ
+    // If LCD uses 3.3V instead of 5V, set ADC_BUTTONS_VALUE_SCALE to 1.0
+    // and ADC_BUTTONS_R_PULLUP to 0.82
+    //
+    // NOTE: R1 on LCD was replaced from 10kΩ to 330Ω to fix ADC readings.
+    // Measured ADC values (10-bit, HAL_ADC_RANGE=1024):
+    // Physical button layout:
+    //   Top:    UP      (10-bit ~203) → R_pulldown ≈ 0.182 kΩ → UP key
+    //   Left:   Back    (10-bit ~255) → R_pulldown ≈ 0.240 kΩ → LEFT key
+    //   Center: Down    (10-bit ~413) → R_pulldown ≈ 0.480 kΩ → MIDDLE key (click = opens menu)
+    //   Bottom: Menu    (10-bit ~631) → R_pulldown ≈ 1.059 kΩ → DOWN key
+    //   Right:  Enter   (10-bit ~851) → R_pulldown ≈ 2.593 kΩ → RIGHT key (click = selects)
+    //   Menu encoder button = BTN_ENC (IO13), not ADC
+    //
+    // NOTE: REVERSE_MENU_DIRECTION is forced by ZONESTAR_LCD in Conditionals_LCD.h.
+    //       handle_keypad() is modified to swap UP/DOWN back to normal orientation.
+    //
+    #define ADC_BUTTONS_R_PULLUP            0.82    // 4.7kΩ || 1kΩ ≈ 0.82kΩ
+    #define ADC_BUTTONS_VALUE_SCALE         1.09    // Vth(3.6V) / Vref(3.3V)
+    #define ADC_BUTTONS_LEFT_R_PULLDOWN     0.240   // Left/Back button (10-bit ~255)
+    #define ADC_BUTTONS_RIGHT_R_PULLDOWN    2.593   // Right/Enter button (10-bit ~851) → RIGHT key (click)
+    #define ADC_BUTTONS_UP_R_PULLDOWN       0.182   // Up button (10-bit ~203)
+    #define ADC_BUTTONS_DOWN_R_PULLDOWN     0.480   // Down button (10-bit ~413) → MIDDLE key (click)
+    #define ADC_BUTTONS_MIDDLE_R_PULLDOWN   1.059   // Center/Menu button (10-bit ~631) → DOWN key
+
+  #else // !MKS_MINI_12864 && !ZONESTAR_LCD
 
     #define LCD_PINS_D4                     0
     #if ENABLED(REPRAP_DISCOUNT_SMART_CONTROLLER)

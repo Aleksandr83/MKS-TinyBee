@@ -36,10 +36,9 @@ static SPISettings spiConfig;
 
 // Initialize SPI bus
 void spiBegin() {
-  #if !PIN_EXISTS(SD_SS)
-    #error "SD_SS_PIN not defined!"
+  #if PIN_EXISTS(SD_SS)
+    OUT_WRITE(SD_SS_PIN, HIGH);
   #endif
-  OUT_WRITE(SD_SS_PIN, HIGH);
   SET_OUTPUT(SD_SCK_PIN);
   SET_INPUT(SD_MISO_PIN);
   SET_OUTPUT(SD_MOSI_PIN);
@@ -120,7 +119,6 @@ void spiSendBlock(uint8_t token, const uint8_t *buf) {
   while (!TEST(SPSR, SPIF)) { /* nada */ };
   SPI.endTransaction();
 }
-
 
 // Begin SPI transaction, set clock, bit order, data mode
 void spiBeginTransaction(uint32_t spiClock, uint8_t bitOrder, uint8_t dataMode) {

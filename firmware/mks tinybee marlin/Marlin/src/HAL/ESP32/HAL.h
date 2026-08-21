@@ -199,3 +199,72 @@ FORCE_INLINE static void DELAY_CYCLES(uint32_t x) {
   }
 
 }
+
+// ------------------------
+// MarlinHAL Class
+// ------------------------
+
+class MarlinHAL {
+public:
+
+  // Earliest possible init, before setup()
+  MarlinHAL() {}
+
+  // Watchdog
+  static void watchdog_init()    { ::watchdog_init(); }
+  static void watchdog_refresh() { HAL_watchdog_refresh(); }
+
+  static void init()          { HAL_init(); }           // Called early in setup()
+  static void init_board()    { HAL_init_board(); }     // Called less early in setup()
+  static void reboot()        { HAL_reboot(); }         // Restart the firmware from 0x0
+
+  // Interrupts
+  static bool isr_state() { return ISRS_ENABLED(); }
+  static void isr_on()    { ENABLE_ISRS(); }
+  static void isr_off()   { DISABLE_ISRS(); }
+
+  static void delay_ms(const int ms) { _delay_ms(ms); }
+
+  // Tasks, called from idle()
+  static void idletask() { HAL_idletask(); }
+
+  // Reset
+  static uint8_t get_reset_source()   { return HAL_get_reset_source(); }
+  static void    clear_reset_source() { HAL_clear_reset_source(); }
+
+  // Free SRAM
+  static int freeMemory() { return ::freeMemory(); }
+
+  //
+  // ADC Methods
+  //
+
+  static uint16_t adc_result;
+
+  // Called by Temperature::init once at startup
+  static void adc_init() { HAL_adc_init(); }
+
+  // Called by Temperature::init for each sensor at startup
+  static void adc_enable(const uint8_t ch) {}
+
+  // Begin ADC sampling on the given pin. Called from Temperature::isr!
+  static void adc_start(const pin_t pin) { HAL_adc_start_conversion((uint8_t)pin); }
+
+  // Is the ADC ready for reading?
+  static bool adc_ready() { return true; }
+
+  // The current value of the ADC register
+  static uint16_t adc_value() { return HAL_adc_result; }
+
+  /**
+   * Set the PWM duty cycle for the pin to the given value.
+   * No option to invert the duty cycle [default = false]
+   * No option to change the scale of the provided value to enable finer PWM duty control [default = 255]
+   */
+  static void set_pwm_duty(const pin_t pin, const uint16_t v, const uint16_t=255, const bool=false) {
+    analogWrite(pin, v);
+  }
+
+private:
+  static void dma_init() {}
+};

@@ -16,7 +16,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -35,7 +35,7 @@
   .setup_fn = SETUP }
 
 const struct DGUS_ScreenSetup screen_setup_list[] PROGMEM = {
-  #if ENABLED(SDSUPPORT)
+  #if HAS_MEDIA
     SETUP_HELPER(DGUS_Screen::PRINT,            &DGUSSetupHandler::Print),
   #endif
   SETUP_HELPER(DGUS_Screen::PRINT_STATUS,       &DGUSSetupHandler::PrintStatus),
