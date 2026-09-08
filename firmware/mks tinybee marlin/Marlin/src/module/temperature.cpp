@@ -356,6 +356,10 @@ PGMSTR(str_t_heating_failed, STR_T_HEATING_FAILED);
   uint8_t Temperature::autofan_speed[HOTENDS] = ARRAY_N_1(HOTENDS, FAN_OFF_PWM);
 #endif
 
+#if HAS_AUTO_FAN
+  bool Temperature::extruder_autofan_enabled = true; // = Auto by temperature
+#endif
+
 #if ENABLED(AUTO_POWER_CHAMBER_FAN)
   uint8_t Temperature::chamberfan_speed = FAN_OFF_PWM;
 #endif
@@ -1192,7 +1196,7 @@ int16_t Temperature::getHeaterPower(const heater_id_t heater_id) {
     };
 
     uint8_t fanState = 0;
-    HOTEND_LOOP() {
+    if (extruder_autofan_enabled) HOTEND_LOOP() {
       if (temp_hotend[e].celsius >= EXTRUDER_AUTO_FAN_TEMPERATURE)
         SBI(fanState, pgm_read_byte(&fanBit[e]));
     }

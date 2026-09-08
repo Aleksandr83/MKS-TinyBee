@@ -262,6 +262,13 @@ void menu_temperature() {
 
   #endif // HAS_FAN
 
+  #if HAS_AUTO_FAN
+    //
+    // Hotend Auto Fan (Auto by Temp / Force Off)
+    //
+    EDIT_ITEM(bool, MSG_HOTEND_AUTO_FAN, &thermalManager.extruder_autofan_enabled);
+  #endif
+
   #if HAS_PREHEAT
     //
     // Preheat for all Materials

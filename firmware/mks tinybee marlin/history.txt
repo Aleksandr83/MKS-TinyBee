@@ -514,3 +514,71 @@ HISTORY LOG
 - Fix: Increased bed THERMAL_PROTECTION_BED_PERIOD 20→60s, HYSTERESIS 2→12°C.
 - File: Marlin/Configuration_adv.h lines 278-279, 304-305.
 - NEXT: Flash firmware and run M502+M500 to apply new defaults.
+2026-09-08: Hotend auto-fan force toggle (LCD menu).
+- Feature: Added Temperature menu item "Hotend Fan Auto" (On/Off) to force the hotend
+  auto fan (E0_AUTO_FAN_PIN 148, threshold EXTRUDER_AUTO_FAN_TEMPERATURE 50) OFF, and to
+  restore Auto-by-temperature behavior when toggled back ON.
+- Implementation:
+  - temperature.h: new public static bool extruder_autofan_enabled (default true), guarded #if HAS_AUTO_FAN.
+  - temperature.cpp: static init = true; update_autofans() HOTEND_LOOP now sets the hotend
+    auto-fan bit only while extruder_autofan_enabled is true, so the pin is driven LOW while
+    forced off and resumes automatically when re-enabled (update cadence ~2.5s).
+  - menu_temperature.cpp (Temperature submenu): EDIT_ITEM(bool, MSG_HOTEND_AUTO_FAN,
+    &thermalManager.extruder_autofan_enabled) -> Auto (ON) / Force Off (OFF).
+  - language_en.h: new LSTR MSG_HOTEND_AUTO_FAN = "Hotend Fan Auto".
+- Verified: PlatformIO env mks_tinybee compile SUCCESS (incremental, 18.9s).
+- NEXT: Flash firmware, heat hotend above 50C, toggle the item OFF (fan stops) then ON (fan resumes).
+
+2026-09-08: SD file rename+corruption after Stop Print - root cause investigation (main @ eeb0405, no code changes).
+- Symptom: FAT32 microSD contains ps_repaired_PETG_8h54m.gcode (28-char LFN, 3 VFAT entries + 1 short entry in root dir).
+  LCD print from SD, then Stop Print -> file is "renamed" and corrupted on the card when checked on PC.
+- Verified by code reading + grep (active build = LCD/HD44780, main branch, no WebUI/wifi):
+  * No rename/copy of the print file exists anywhere in the SD start/stop path. The only .rename()/rename() hits are
+    in extui mks_ui wifi/pic code (not compiled) and the SdBaseFile::rename API (unused on main build).
+  * The printed gcode file is opened O_READ only. STOP path: LCD "Stop Print" (menu_main.cpp:254 -> ui.abort_print)
+    -> MarlinCore abortSDPrinting() (MarlinCore.cpp:361) -> card.abortFilePrintNow() closes the print file
+    -> queue.clear() -> recovery.purge() -> card.removeJobRecoveryFile() -> removeFile("/PLR") (cardreader.cpp:1338/776).
+  * POWER_LOSS_RECOVERY is ENABLED (Configuration_adv.h:1368), PLR_ENABLED_DEFAULT true. ALL SD WRITES during an SD
+    print/stop come from PLR:
+      - print start: M24 -> recovery.save(true) creates /PLR in root dir (M24_M25.cpp:107)
+      - during print: gcode.cpp:207-211 calls recovery.save() when Z rises > POWER_LOSS_MIN_Z_CHANGE 0.05mm
+        (open /PLR O_CREAT|O_WRITE|O_TRUNC|O_SYNC, write, close - powerloss.cpp write(), cardreader.cpp openJobRecoveryFile)
+      - stop: recovery.purge() deletes /PLR (root-dir entry mark E5 + FAT cluster free).
+  * These FAT32 root-dir + FAT writes go through Marlin's SdFat SPI driver (Sd2Card.cpp) on ESP32: per-byte
+    SPI.beginTransaction/transfer/endTransaction (HAL_SPI.cpp) with NO whole-command bus lock, SPI up to 16 MHz.
+    SD WRITES are the fragile link on this board (reads fine, writes corrupt on stop).
+- Leading hypothesis: PLR's create/rewrite/delete of /PLR in the SAME FAT32 root directory that holds the long-named
+  gcode (3 LFN + 1 short entries) corrupts that directory sector around print stop -> LFN entries lost
+  (file "renamed" to its 8.3 short name) and/or FAT/content damage ("corrupted").
+- Confirmed by grep: no other feature writes to the card during an active-build SD print (M28/logger not active).
+- Pending hardware confirmation: turn PLR OFF (M413 S0 or LCD toggle "Power-loss Recovery") and repeat print+Stop;
+  if the file stays intact, PLR writes are confirmed as the cause.
+- NEXT: decide with user - disable POWER_LOSS_RECOVERY in firmware (recommended for ESP32 SPI SD, removes all SD writes)
+  vs keep PLR and accept risk.
+2026-09-08: Disabled POWER_LOSS_RECOVERY to fix SD file corruption on Stop Print (user-approved).
+- Problem: LCD SD print + Stop Print -> printed gcode file (long 28-char name) renamed/corrupted on FAT32 card.
+- Root cause (see previous entry): PLR writes /PLR (create at start, rewrite each layer, delete at stop) into the
+  same FAT32 root directory holding the long-named gcode file; ESP32 SPI SdFat write path is unreliable, so a bad
+  directory-sector write around stop corrupts the file's LFN/FAT entries.
+- Fix: commented out #define POWER_LOSS_RECOVERY in Marlin/Configuration_adv.h (line ~1368). Config-only change
+  (no C++ edited), so no compile check required per rules.txt. All recovery.* references verified #if-guarded
+  (MarlinCore.cpp, stepper.cpp, planner.cpp, settings.cpp, gcode/queue.cpp etc.), so disabling is safe; features.ini
+  will simply not add powerloss.cpp / PLR gcode files.
+- Result: with PLR disabled the firmware performs NO SD writes during print/start/stop, eliminating the corruption.
+  Trade-off: no power-loss resume feature (option left commented for easy re-enable if a more robust SD write path
+  or a real POWER_LOSS_PIN is added later).
+- NEXT: build & flash firmware (main @ eeb0405 + this change), then re-test print + Stop Print with the same gcode.
+
+2026-09-08: Symptom refinement from user (field test in progress) - whole-card corruption, not just file rename.
+- User clarifies the failure is more severe than a single renamed/corrupted file: after LCD SD print + Stop Print the
+  FAT32 microSD becomes unusable and must be reformatted before it can be used again (state as observed before the
+  PLR-disable flash). The fix result is still being studied on the printer.
+- Implication: the damage is not limited to the printed file's LFN/directory entries - it hits filesystem structure
+  (root directory chain / FAT table / allocation), which is why the OS/card reader reports the whole card as damaged.
+  This strengthens the hypothesis that a bad directory/FAT-sector write around Stop Print corrupts shared structure:
+  PLR repeatedly creates/truncate-rewrites/deletes /PLR in the SAME FAT32 root directory holding the long-named gcode,
+  and the ESP32 SPI SdFat write path is fragile (per-byte transactions, no whole-command bus lock, no write verify).
+- Status: firmware with POWER_LOSS_RECOVERY disabled is being re-tested (print + Stop Print with ps_repaired_PETG_8h54m.gcode).
+  Awaiting result: if the card now survives (file intact, no reformat needed) -> PLR writes confirmed as the cause.
+  If corruption persists -> with PLR off the firmware does no SD writes during print/start/stop, so next suspects are
+  the SD read/mount path, marginal card (test another card / check with a card health tool), or a different trigger.

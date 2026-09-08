@@ -604,6 +604,10 @@ class Temperature {
     #if ANY(AUTO_POWER_E_FANS, HAS_FANCHECK)
       static uint8_t autofan_speed[HOTENDS];
     #endif
+    #if HAS_AUTO_FAN
+      // false = force the hotend auto fan OFF until re-enabled
+      static bool extruder_autofan_enabled;
+    #endif
     #if ENABLED(AUTO_POWER_CHAMBER_FAN)
       static uint8_t chamberfan_speed;
     #endif

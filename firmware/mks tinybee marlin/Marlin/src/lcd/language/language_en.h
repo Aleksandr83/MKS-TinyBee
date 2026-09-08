@@ -347,6 +347,7 @@ namespace Language_en {
   LSTR MSG_EXTRA_FAN_SPEED                = _UxGT("Extra Fan Speed");
   LSTR MSG_EXTRA_FAN_SPEED_N              = _UxGT("Extra Fan Speed ~");
   LSTR MSG_CONTROLLER_FAN                 = _UxGT("Controller Fan");
+  LSTR MSG_HOTEND_AUTO_FAN                = _UxGT("Hotend Fan Auto");
   LSTR MSG_CONTROLLER_FAN_IDLE_SPEED      = _UxGT("Idle Speed");
   LSTR MSG_CONTROLLER_FAN_AUTO_ON         = _UxGT("Auto Mode");
   LSTR MSG_CONTROLLER_FAN_SPEED           = _UxGT("Active Speed");
